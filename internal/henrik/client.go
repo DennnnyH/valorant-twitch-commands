@@ -112,3 +112,67 @@ func (c *Client) GetMMRv3(ctx context.Context, region, platform, name, tag strin
 	}
 	return payload.Data, nil
 }
+
+type HistoryEntry struct {
+	MatchID string `json:"match_id"`
+	Map     struct {
+		Name string `json:"name"`
+	} `json:"map"`
+	RR         int    `json:"rr"`
+	LastChange int    `json:"last_change"`
+	Date       string `json:"date"`
+	DateRaw    int64  `json:"date_raw"`
+}
+
+// GetMMRHistoryV2 returns recent competitive games, newest first.
+func (c *Client) GetMMRHistoryV2(ctx context.Context, region, platform, name, tag string) ([]HistoryEntry, error) {
+	if platform == "" {
+		platform = "pc"
+	}
+	endpoint := fmt.Sprintf(
+		"https://api.henrikdev.xyz/valorant/v2/mmr-history/%s/%s/%s/%s",
+		url.PathEscape(region),
+		url.PathEscape(platform),
+		url.PathEscape(name),
+		url.PathEscape(tag),
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", c.apiKey)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, &upstream.Error{
+			Source:     "henrik",
+			Status:     resp.StatusCode,
+			RetryAfter: resp.Header.Get("Retry-After"),
+			Detail:     string(body),
+		}
+	}
+
+	var payload struct {
+		Data struct {
+			History []HistoryEntry `json:"history"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+	return payload.Data.History, nil
+}

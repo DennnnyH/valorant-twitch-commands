@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/dennn/valorant-twitch-commands/internal/config"
 	"github.com/dennn/valorant-twitch-commands/internal/henrik"
@@ -16,7 +17,8 @@ func main() {
 	riotClient := riot.NewClient(cfg.RiotAPIKey)
 	henrikClient := henrik.NewClient(cfg.HenrikAPIKey)
 	rank := service.NewRank(riotClient, henrikClient)
-	handler := httpapi.NewRouter(cfg, rank)
+	record := service.NewRecord(henrikClient, time.Now())
+	handler := httpapi.NewRouter(cfg, rank, record)
 
 	addr := ":" + cfg.Port
 	log.Printf("listening on %s", addr)
